@@ -1,0 +1,20 @@
+{
+  "name": "Helyx",
+  "short_name": "Helyx",
+  "description": "Gestão pessoal de saúde — os dados ficam só neste aparelho.",
+  "start_url": "/helyx-celular/",
+  "scope": "/helyx-celular/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b2a2e",
+  "theme_color": "#12393c",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/helyx-celular/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
