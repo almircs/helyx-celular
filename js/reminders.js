@@ -23,7 +23,24 @@ async function check() {
   }
 }
 
-export function startReminders() { check(); setInterval(check, 60e3); }
+// Doses do dia (horários dos medicamentos): avisa na hora e de novo se ficar 30 min sem anotação
+async function checkDoses() {
+  let day;
+  try { day = await api('/doses'); } catch { return; }
+  if (!day.enabled) return; // controle de doses desligado: sem avisos de dose
+  for (const d of day.doses) {
+    if (d.status || !d.due) continue;
+    const key = `dose-${d.medication_id}-${d.date}-${d.time}-${d.late ? 'atraso' : 'hora'}`;
+    if (shown.has(key)) continue;
+    shown.add(key);
+    // sem o nome do remédio: o aviso pode aparecer com outras pessoas por perto
+    const msg = d.late ? `O remédio das ${d.time} ainda não foi anotado` : `Hora do remédio das ${d.time}`;
+    toast('Lembrete: ' + msg);
+    try { if ('Notification' in window && Notification.permission === 'granted') new Notification('Helyx', { body: msg, icon: '/helyx-celular/icon.png' }); } catch { /* sem suporte */ }
+  }
+}
+
+export function startReminders() { check(); checkDoses(); setInterval(() => { check(); checkDoses(); }, 60e3); }
 
 export async function askPermission() {
   if (!('Notification' in window)) return 'indisponivel';

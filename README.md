@@ -17,4 +17,4 @@ Os dados ficam **só no aparelho**; nada é enviado para a internet.
 **Trazer os dados do computador:** no programa do computador, *Configurações → Backup → Baixar backup* (arquivo .helyx).
 No celular, crie sua conta e use *Configurações → Backup → Restaurar* com esse arquivo.
 
-Os arquivos desta pasta são gerados por `mobile/build.js` do repositório principal do Helyx. Versão 1.9.0-202611011648.
+Os arquivos desta pasta são gerados por `mobile/build.js` do repositório principal do Helyx. Versão 1.11.0-202611021815.

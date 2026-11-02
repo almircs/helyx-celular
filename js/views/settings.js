@@ -1,6 +1,7 @@
+import { waLink, weekMessage } from '../doses.js';
 import { api, html, icon, fields, readForm, toast, view, go, invalidate, fmtDate, confirmDialog, askConfirm, showRecoveryCode, capsLockHint } from '../lib.js';
 
-const TABS = [['perfil', 'Meu perfil'], ['medicos', 'Médicos'], ['backup', 'Backup'], ['seguranca', 'Segurança e dados'], ['aparencia', 'Aparência']];
+const TABS = [['perfil', 'Meu perfil'], ['medicos', 'Médicos'], ['backup', 'Backup'], ['seguranca', 'Segurança e dados'], ['aparencia', 'Aparência'], ['doses', 'Controle de doses']];
 const ENTITY = { usuario: 'Conta', sessao: 'Acesso', perfil: 'Perfil', medico: 'Médico', consulta: 'Consulta', exame: 'Exame', marcador: 'Exame (catálogo)', medicamento: 'Medicamento', medicao: 'Medição', agenda: 'Agenda', dados: 'Dados', ia: 'IA' };
 
 export function applyTheme() {
@@ -15,9 +16,54 @@ export async function render({ params, query }) {
   if (tab === 'medicos') return doctors(head, query);
   if (tab === 'seguranca') return security(head);
   if (tab === 'backup') return backupView(head);
+  if (tab === 'doses') return dosesView(head);
   let cur = 'auto'; try { cur = localStorage.getItem('tema') || 'auto'; } catch { /* */ }
   return view(html`${head}<div class="card"><h2>Tema</h2><div class="seg">${[['auto', 'Escuro (padrão)'], ['light', 'Claro']].map(([v, l]) => html`<button class="${cur === v ? 'on' : ''}" data-t="${v}">${l}</button>`)}</div></div>`, (el) => {
     el.querySelectorAll('[data-t]').forEach((b) => b.onclick = () => { try { localStorage.setItem('tema', b.dataset.t); } catch { /* */ } applyTheme(); go('#/configuracoes/aparencia'); });
+  });
+}
+
+// Controle de doses (botão Tomei) e familiar que acompanha
+async function dosesView(head) {
+  const [fam, hist, today] = await Promise.all([api('/family'), api('/doses/history?days=7'), api('/doses')]);
+  const track = today.enabled;
+  const days = hist.filter((h) => h.total);
+  const WD = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  return view(html`${head}
+    <div class="card">
+      <h2>Controle de doses</h2>
+      <p class="muted small">Ligado, a página Medicamentos mostra as doses de hoje com <b>Tomei</b> e <b>Não tomei</b>, e o Helyx avisa quando uma dose fica 30 minutos sem anotação. Os horários vêm do campo <b>Horário(s)</b> de cada remédio em uso (ex.: 08:00 e 20:00).</p>
+      <div class="seg" style="margin:.6rem 0 0"><button class="${track ? 'on' : ''}" data-d="1">Ligado</button><button class="${track ? '' : 'on'}" data-d="0">Desligado</button></div>
+    </div>
+    <form class="card" id="famForm">
+      <h2>Familiar que acompanha</h2>
+      <p class="muted small">Depois de anotar uma dose, aparece o link <b>Avisar</b> ao lado dela, que abre o WhatsApp com a mensagem pronta para este familiar. Nada é enviado sozinho: a mensagem só sai quando você confirma no WhatsApp.</p>
+      <div class="form-grid">${fields([
+        { name: 'name', label: 'Nome', placeholder: 'Ex.: Ana (filha)' },
+        { name: 'phone', label: 'WhatsApp', type: 'tel', placeholder: 'DDD + número, ex.: 31 99999-8888' },
+        { name: 'include_names', label: 'Incluir o nome do remédio nas mensagens', type: 'checkbox', full: true },
+      ], fam)}</div>
+      <p class="small muted">Sem marcar a opção acima, a mensagem diz só o horário (ex.: “tomou o remédio das 08:00”).</p>
+      <div class="form-actions" style="position:static;background:none"><button class="btn primary">Salvar familiar</button>${fam.phone ? html`<button type="button" class="btn danger" id="famDel">Remover</button>` : ''}</div>
+    </form>
+    ${track ? html`<div class="card">
+      <h2>Últimos dias</h2>
+      ${days.length ? html`<ul class="list">${days.map((h) => html`<li><div class="grow"><div class="title">${WD[new Date(h.date + 'T12:00:00').getDay()]} ${fmtDate(h.date).slice(0, 5)}</div>
+          <div class="meta">${h.taken} de ${h.total} tomados${h.skipped ? ` · ${h.skipped} não tomado(s)` : ''}${h.missing ? ` · ${h.missing} sem anotação` : ''}</div></div>
+          <span class="tag ${h.taken === h.total ? 'concluido' : 'pendente'}">${h.taken === h.total ? 'Completo' : 'Incompleto'}</span></li>`)}</ul>
+        ${fam.phone ? html`<a class="btn" target="_blank" rel="noopener" href="${waLink(fam.phone, weekMessage(fam, hist))}">Enviar resumo para ${fam.name || 'o familiar'} no WhatsApp</a>` : ''}`
+      : html`<p class="empty">O resumo começa no primeiro dia em que alguém tocar em <b>Tomei</b> ou <b>Não tomei</b>.</p>`}
+      <p class="small muted" style="margin-top:.6rem">“Sem anotação” quer dizer que ninguém tocou em Tomei ou Não tomei — não significa que a dose foi perdida.</p>
+    </div>` : ''}`, (el) => {
+    el.querySelectorAll('[data-d]').forEach((b) => b.onclick = async () => {
+      try { await api('/doses/settings', { method: 'PUT', body: { enabled: b.dataset.d === '1' } }); toast(b.dataset.d === '1' ? 'Controle de doses ligado' : 'Controle de doses desligado'); go('#/configuracoes/doses'); } catch (err) { toast(err.message, true); }
+    });
+    el.querySelector('#famForm').onsubmit = async (e) => {
+      e.preventDefault();
+      try { await api('/family', { method: 'PUT', body: readForm(e.target) }); toast('Familiar salvo'); go('#/configuracoes/doses'); } catch (err) { toast(err.message, true); }
+    };
+    const del = el.querySelector('#famDel');
+    if (del) del.onclick = async () => { await api('/family', { method: 'PUT', body: {} }); toast('Familiar removido'); go('#/configuracoes/doses'); };
   });
 }
 
